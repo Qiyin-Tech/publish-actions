@@ -9,13 +9,14 @@ GitHub App credentials through their own Actions variables and secrets.
 
 The repository owns publishing protocol, not application-specific builds:
 
-- [`acr-sync`](https://github.com/Qiyin-Tech/acr-sync) remains the authority for copying one image
-  or OCI artifact to ACR;
-- `actions/update-pack` updates a Nomad Pack channel after a deployable version is published;
-- `.github/workflows/publish-pack-docker.yml` is the high-level adapter for conventional
-  Pack-backed `linux/amd64` Docker applications;
+- `actions/publish-docker` builds and publishes a conventional `linux/amd64` image to GHCR;
+- [`acr-sync`](https://github.com/Qiyin-Tech/acr-sync) remains the authority for copying that image
+  or another OCI artifact to ACR;
+- `actions/update-pack` updates a Nomad Pack channel after the deployable version is available;
+- `.github/workflows/publish-docker.yml` composes those three protocols for conventional
+  Pack-backed Docker applications;
 - custom Windows, OCI artifact, GPU, cache, or deploy-asset workflows stay in their application
-  repositories and may compose the narrow actions they need.
+  repositories and compose only the narrow actions they need.
 
 GitHub ref rules belong to adapters. `update-pack` receives a normalized plan and does not know
 whether a caller uses `main`, `dev`, `release/**`, or another branch convention.
@@ -39,7 +40,7 @@ permissions:
 
 jobs:
   publish:
-    uses: Qiyin-Tech/publish-actions/.github/workflows/publish-pack-docker.yml@v1
+    uses: Qiyin-Tech/publish-actions/.github/workflows/publish-docker.yml@v1
     with:
       pack: orchestra-frontend
       rc_branch: ${{ vars.RC_BRANCH }}
@@ -64,7 +65,11 @@ Its ref contract is:
 
 The Docker convention is intentionally fixed to `context=.`, `file=./Dockerfile`,
 `target=runtime`, and `platform=linux/amd64`. A repository that cannot follow this convention keeps
-its own build workflow and composes `acr-sync` and `update-pack` instead.
+its own build workflow and composes `acr-sync` and `update-pack` itself.
+
+`actions/publish-docker` deliberately has no ACR or Nomad Pack credentials. The reusable workflow
+uses its normalized outputs to invoke `acr-sync`, create a formal GitHub Release when applicable,
+and finally invoke `update-pack`.
 
 ## Update one Pack
 

@@ -1,10 +1,7 @@
-name: Publish Pack-backed Docker application
-description: Publish a conventional linux/amd64 Docker application and update its Nomad Pack dev or rc channel
+name: Publish Docker image
+description: Build and publish a conventional linux/amd64 Docker image to GHCR
 
 inputs:
-  pack:
-    description: Nomad Pack name; explicit because repository and Pack names are not universally identical
-    required: true
   rc_branch:
     description: Selected release/vX.Y.Z branch; required only when an RC branch is published
     required: false
@@ -21,25 +18,6 @@ inputs:
     description: Registry tag used as the BuildKit cache source; empty disables cache import
     required: false
     default: buildcache
-  release_asset_source:
-    description: Optional file copied to <pack>-<tag>.env.example for formal releases
-    required: false
-    default: ''
-  acr_endpoint:
-    description: Target ACR endpoint
-    required: true
-  acr_username:
-    description: Target ACR username
-    required: true
-  acr_password:
-    description: Target ACR password
-    required: true
-  nomad_packs_app_client_id:
-    description: GitHub App client ID allowed to dispatch nomad-packs workflows
-    required: true
-  nomad_packs_app_private_key:
-    description: GitHub App private key allowed to dispatch nomad-packs workflows
-    required: true
 
 outputs:
   image:
@@ -51,6 +29,9 @@ outputs:
   kind:
     description: Publish kind (manual, dev, rc, or release)
     value: ${{ steps.metadata.outputs.kind }}
+  published:
+    description: Whether the immutable image is published and current for downstream publication
+    value: ${{ steps.result.outputs.published }}
 
 runs:
   using: composite
@@ -132,38 +113,15 @@ runs:
         MOVING_TAG: ${{ steps.metadata.outputs.moving_tag }}
       run: docker buildx imagetools create --tag "${IMAGE}:${MOVING_TAG}" "${IMAGE}:${IMAGE_TAG}"
 
-    - name: Sync published image to ACR
-      if: ${{ success() && github.event_name != 'workflow_dispatch' && (steps.metadata.outputs.kind == 'release' || steps.current.outputs.current == 'true') }}
-      uses: Qiyin-Tech/acr-sync@v2
-      with:
-        source: ${{ steps.metadata.outputs.image }}
-        tag: ${{ steps.metadata.outputs.image_tag }}
-        arch: amd64
-        target_namespace: qiyin
-        source_username: ${{ github.actor }}
-        source_password: ${{ github.token }}
-        acr_endpoint: ${{ inputs.acr_endpoint }}
-        acr_username: ${{ inputs.acr_username }}
-        acr_password: ${{ inputs.acr_password }}
-
-    - name: Create or update GitHub Release
-      if: ${{ success() && steps.metadata.outputs.kind == 'release' }}
+    - name: Export publication result
+      id: result
       shell: bash
       env:
-        ACTION_PATH: ${{ github.action_path }}
-        GH_TOKEN: ${{ github.token }}
-        PACK: ${{ inputs.pack }}
-        RELEASE_ASSET_SOURCE: ${{ inputs.release_asset_source }}
-      run: bash "${ACTION_PATH}/scripts/publish-release"
-
-    - name: Update Nomad Pack
-      if: ${{ success() && github.event_name != 'workflow_dispatch' && (steps.metadata.outputs.kind == 'release' || steps.current.outputs.current == 'true') }}
-      uses: $/actions/update-pack
-      with:
-        pack: ${{ inputs.pack }}
-        version: ${{ steps.metadata.outputs.image_tag }}
-        channel: ${{ steps.metadata.outputs.kind == 'rc' && 'rc' || 'dev' }}
-        mode: ${{ steps.metadata.outputs.kind == 'release' && 'release' || 'moving' }}
-        guard_ref: ${{ (steps.metadata.outputs.kind == 'dev' || steps.metadata.outputs.kind == 'rc') && github.ref_name || '' }}
-        app_client_id: ${{ inputs.nomad_packs_app_client_id }}
-        app_private_key: ${{ inputs.nomad_packs_app_private_key }}
+        KIND: ${{ steps.metadata.outputs.kind }}
+        CURRENT: ${{ steps.current.outputs.current }}
+      run: |
+        if [[ "${KIND}" == 'release' || "${CURRENT}" == 'true' ]]; then
+          echo 'published=true' >> "${GITHUB_OUTPUT}"
+        else
+          echo 'published=false' >> "${GITHUB_OUTPUT}"
+        fi

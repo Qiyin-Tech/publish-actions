@@ -9,14 +9,28 @@ import pytest
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-SCRIPT = REPOSITORY / "actions" / "publish-pack-docker" / "scripts" / "prepare-metadata"
+SCRIPT = REPOSITORY / "actions" / "publish-docker" / "scripts" / "prepare-metadata"
 DISPATCH_SCRIPT = (
     REPOSITORY / "actions" / "update-pack" / "scripts" / "dispatch-pack-update"
 )
 CHECK_SCRIPT = (
-    REPOSITORY / "actions" / "publish-pack-docker" / "scripts" / "check-current-ref"
+    REPOSITORY / "actions" / "publish-docker" / "scripts" / "check-current-ref"
 )
 SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_publish_docker_keeps_acr_and_pack_updates_outside() -> None:
+    action = (REPOSITORY / "actions" / "publish-docker" / "action.yml").read_text(
+        encoding="utf-8"
+    )
+    workflow = (
+        REPOSITORY / ".github" / "workflows" / "publish-docker.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "acr-sync" not in action
+    assert "actions/update-pack" not in action
+    assert "Qiyin-Tech/acr-sync@v2" in workflow
+    assert "uses: $/actions/update-pack" in workflow
 
 
 def run_metadata(
