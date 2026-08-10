@@ -1,0 +1,60 @@
+name: Update Nomad Pack
+description: Update one moving Nomad Pack channel after a deployable image or OCI artifact is published
+
+inputs:
+  pack:
+    description: Pack directory name under nomad-packs/packs; never inferred from the source repository
+    required: true
+  version:
+    description: Published image or artifact tag written as the Pack version and default reference tag
+    required: true
+  channel:
+    description: Moving Pack branch to update (dev or rc)
+    required: true
+  mode:
+    description: moving updates only the channel; release also creates the immutable <pack>/<version> Pack tag
+    required: true
+  guard_ref:
+    description: Optional source branch that must still point to github.sha before dispatch
+    required: false
+    default: ''
+  app_client_id:
+    description: GitHub App client ID allowed to dispatch the nomad-packs update workflow
+    required: true
+  app_private_key:
+    description: GitHub App private key allowed to dispatch the nomad-packs update workflow
+    required: true
+
+outputs:
+  dispatched:
+    description: true when an update was dispatched; false when guard_ref detected a stale build
+    value: ${{ steps.dispatch.outputs.dispatched }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create Nomad Packs App token
+      id: token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ inputs.app_client_id }}
+        private-key: ${{ inputs.app_private_key }}
+        owner: Qiyin-Tech
+        repositories: nomad-packs
+        permission-actions: write
+
+    - name: Validate and dispatch Pack update
+      id: dispatch
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.token.outputs.token }}
+        SOURCE_GH_TOKEN: ${{ github.token }}
+        PACK: ${{ inputs.pack }}
+        VERSION: ${{ inputs.version }}
+        CHANNEL: ${{ inputs.channel }}
+        MODE: ${{ inputs.mode }}
+        GUARD_REF: ${{ inputs.guard_ref }}
+        GIT_NAME: ${{ github.actor }}
+        GIT_EMAIL: ${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com
+        ACTION_PATH: ${{ github.action_path }}
+      run: bash "${ACTION_PATH}/scripts/dispatch-pack-update"

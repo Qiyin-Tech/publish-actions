@@ -1,0 +1,169 @@
+name: Publish Pack-backed Docker application
+description: Publish a conventional linux/amd64 Docker application and update its Nomad Pack dev or rc channel
+
+inputs:
+  pack:
+    description: Nomad Pack name; explicit because repository and Pack names are not universally identical
+    required: true
+  rc_branch:
+    description: Selected release/vX.Y.Z branch; required only when an RC branch is published
+    required: false
+    default: ''
+  build_args:
+    description: Newline-delimited Docker build arguments
+    required: false
+    default: ''
+  cache_mode:
+    description: BuildKit cache export mode (registry, inline, or none)
+    required: false
+    default: registry
+  cache_tag:
+    description: Registry tag used as the BuildKit cache source; empty disables cache import
+    required: false
+    default: buildcache
+  release_asset_source:
+    description: Optional file copied to <pack>-<tag>.env.example for formal releases
+    required: false
+    default: ''
+  acr_endpoint:
+    description: Target ACR endpoint
+    required: true
+  acr_username:
+    description: Target ACR username
+    required: true
+  acr_password:
+    description: Target ACR password
+    required: true
+  nomad_packs_app_client_id:
+    description: GitHub App client ID allowed to dispatch nomad-packs workflows
+    required: true
+  nomad_packs_app_private_key:
+    description: GitHub App private key allowed to dispatch nomad-packs workflows
+    required: true
+
+outputs:
+  image:
+    description: Lowercase GHCR image repository
+    value: ${{ steps.metadata.outputs.image }}
+  image_tag:
+    description: Immutable image tag published by this run
+    value: ${{ steps.metadata.outputs.image_tag }}
+  kind:
+    description: Publish kind (manual, dev, rc, or release)
+    value: ${{ steps.metadata.outputs.kind }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check out application repository
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+
+    - name: Prepare publish metadata
+      id: metadata
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CACHE_EXPORT: ${{ inputs.cache_mode }}
+        CACHE_FROM_TAG: ${{ inputs.cache_tag }}
+        RC_BRANCH: ${{ inputs.rc_branch }}
+      run: bash "${ACTION_PATH}/scripts/prepare-metadata"
+
+    - name: Check moving ref before build
+      if: ${{ steps.metadata.outputs.kind == 'dev' || steps.metadata.outputs.kind == 'rc' }}
+      id: precheck
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        GH_TOKEN: ${{ github.token }}
+        REF: ${{ github.ref_name }}
+      run: bash "${ACTION_PATH}/scripts/check-current-ref"
+
+    - name: Log in to GitHub Container Registry
+      if: ${{ steps.metadata.outputs.kind == 'manual' || steps.metadata.outputs.kind == 'release' || steps.precheck.outputs.current == 'true' }}
+      uses: docker/login-action@v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+
+    - name: Set up Docker Buildx
+      if: ${{ steps.metadata.outputs.kind == 'manual' || steps.metadata.outputs.kind == 'release' || steps.precheck.outputs.current == 'true' }}
+      uses: docker/setup-buildx-action@v4
+
+    - name: Build and push immutable image
+      if: ${{ steps.metadata.outputs.kind == 'manual' || steps.metadata.outputs.kind == 'release' || steps.precheck.outputs.current == 'true' }}
+      uses: docker/build-push-action@v7
+      env:
+        DOCKER_BUILD_RECORD_UPLOAD: false
+      with:
+        context: .
+        file: ./Dockerfile
+        target: runtime
+        platforms: linux/amd64
+        push: ${{ github.event_name != 'workflow_dispatch' }}
+        tags: ${{ steps.metadata.outputs.tags }}
+        build-args: ${{ inputs.build_args }}
+        labels: |
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.version=${{ steps.metadata.outputs.image_tag }}
+        cache-from: ${{ steps.metadata.outputs.cache_from }}
+        cache-to: ${{ steps.metadata.outputs.cache_to }}
+
+    - name: Recheck moving ref after build
+      if: ${{ success() && (steps.metadata.outputs.kind == 'dev' || steps.metadata.outputs.kind == 'rc') && steps.precheck.outputs.current == 'true' }}
+      id: current
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        GH_TOKEN: ${{ github.token }}
+        REF: ${{ github.ref_name }}
+      run: bash "${ACTION_PATH}/scripts/check-current-ref"
+
+    - name: Update moving GHCR tag
+      if: ${{ success() && steps.current.outputs.current == 'true' }}
+      shell: bash
+      env:
+        IMAGE: ${{ steps.metadata.outputs.image }}
+        IMAGE_TAG: ${{ steps.metadata.outputs.image_tag }}
+        MOVING_TAG: ${{ steps.metadata.outputs.moving_tag }}
+      run: docker buildx imagetools create --tag "${IMAGE}:${MOVING_TAG}" "${IMAGE}:${IMAGE_TAG}"
+
+    - name: Sync published image to ACR
+      if: ${{ success() && github.event_name != 'workflow_dispatch' && (steps.metadata.outputs.kind == 'release' || steps.current.outputs.current == 'true') }}
+      uses: Qiyin-Tech/acr-sync@v2
+      with:
+        source: ${{ steps.metadata.outputs.image }}
+        tag: ${{ steps.metadata.outputs.image_tag }}
+        arch: amd64
+        target_namespace: qiyin
+        source_username: ${{ github.actor }}
+        source_password: ${{ github.token }}
+        acr_endpoint: ${{ inputs.acr_endpoint }}
+        acr_username: ${{ inputs.acr_username }}
+        acr_password: ${{ inputs.acr_password }}
+
+    - name: Create or update GitHub Release
+      if: ${{ success() && steps.metadata.outputs.kind == 'release' }}
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        GH_TOKEN: ${{ github.token }}
+        PACK: ${{ inputs.pack }}
+        RELEASE_ASSET_SOURCE: ${{ inputs.release_asset_source }}
+      run: bash "${ACTION_PATH}/scripts/publish-release"
+
+    - name: Update Nomad Pack
+      if: ${{ success() && github.event_name != 'workflow_dispatch' && (steps.metadata.outputs.kind == 'release' || steps.current.outputs.current == 'true') }}
+      uses: $/actions/update-pack
+      with:
+        pack: ${{ inputs.pack }}
+        version: ${{ steps.metadata.outputs.image_tag }}
+        channel: ${{ steps.metadata.outputs.kind == 'rc' && 'rc' || 'dev' }}
+        mode: ${{ steps.metadata.outputs.kind == 'release' && 'release' || 'moving' }}
+        guard_ref: ${{ (steps.metadata.outputs.kind == 'dev' || steps.metadata.outputs.kind == 'rc') && github.ref_name || '' }}
+        app_client_id: ${{ inputs.nomad_packs_app_client_id }}
+        app_private_key: ${{ inputs.nomad_packs_app_private_key }}

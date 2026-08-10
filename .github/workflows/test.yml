@@ -1,0 +1,32 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Check shell scripts
+        run: shellcheck actions/*/scripts/*
+      - name: Run unit tests
+        run: uv run --with pytest pytest
+      - name: Parse Action and workflow YAML
+        run: |
+          uv run --with pyyaml python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          paths = [*Path('actions').glob('*/action.yml'), *Path('.github/workflows').glob('*.yml')]
+          for path in paths:
+              yaml.compose(path.read_text(encoding='utf-8'))
+              print(f'parsed {path}')
+          PY
