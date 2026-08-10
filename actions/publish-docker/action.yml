@@ -1,127 +1,102 @@
-name: Publish Docker image
-description: Build and publish a conventional linux/amd64 Docker image to GHCR
+name: Publish Docker package
+description: Build and optionally publish one linux/amd64 Docker package to GHCR
 
 inputs:
-  rc_branch:
-    description: Selected release/vX.Y.Z branch; required only when an RC branch is published
+  # Image identity
+  package:
+    description: Explicit GHCR package name under the caller repository owner
+    required: true
+  tags:
+    description: Newline-delimited Docker tags without a registry or package prefix
+    required: true
+
+  # Build definition
+  context:
+    description: Build context whose files are available to Dockerfile COPY and ADD instructions
+    required: false
+    default: .
+  file:
+    description: Dockerfile path
+    required: false
+    default: ./Dockerfile
+  target:
+    description: Optional Docker build target
     required: false
     default: ''
   build_args:
-    description: Newline-delimited Docker build arguments
+    description: Newline-delimited values for Dockerfile ARG instructions; do not use for secrets
     required: false
     default: ''
-  cache_mode:
-    description: BuildKit cache export mode (registry, inline, or none)
+
+  # BuildKit cache
+  cache_from:
+    description: Newline-delimited BuildKit cache import entries
     required: false
-    default: registry
-  cache_tag:
-    description: Registry tag used as the BuildKit cache source; empty disables cache import
+    default: ''
+  cache_to:
+    description: Newline-delimited BuildKit cache export entries
     required: false
-    default: buildcache
+    default: ''
+
+  # Publication
+  push:
+    description: Whether to publish the image to GHCR
+    required: false
+    default: 'true'
+  token:
+    description: GitHub token with packages write permission
+    required: true
 
 outputs:
   image:
-    description: Lowercase GHCR image repository
+    description: Complete GHCR image name without a tag
     value: ${{ steps.metadata.outputs.image }}
-  image_tag:
-    description: Immutable image tag published by this run
-    value: ${{ steps.metadata.outputs.image_tag }}
-  kind:
-    description: Publish kind (manual, dev, rc, or release)
-    value: ${{ steps.metadata.outputs.kind }}
-  published:
-    description: Whether the immutable image is published and current for downstream publication
-    value: ${{ steps.result.outputs.published }}
+  references:
+    description: Newline-delimited complete GHCR image references
+    value: ${{ steps.metadata.outputs.references }}
+  digest:
+    description: Published image digest; empty when the build is not pushed
+    value: ${{ steps.build.outputs.digest }}
 
 runs:
   using: composite
   steps:
-    - name: Check out application repository
-      uses: actions/checkout@v7
-      with:
-        persist-credentials: false
-        fetch-depth: 0
-
-    - name: Prepare publish metadata
+    - name: Prepare GHCR references
       id: metadata
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
-        CACHE_EXPORT: ${{ inputs.cache_mode }}
-        CACHE_FROM_TAG: ${{ inputs.cache_tag }}
-        RC_BRANCH: ${{ inputs.rc_branch }}
-      run: bash "${ACTION_PATH}/scripts/prepare-metadata"
-
-    - name: Check moving ref before build
-      if: ${{ steps.metadata.outputs.kind == 'dev' || steps.metadata.outputs.kind == 'rc' }}
-      id: precheck
-      shell: bash
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-        GH_TOKEN: ${{ github.token }}
-        REF: ${{ github.ref_name }}
-      run: bash "${ACTION_PATH}/scripts/check-current-ref"
+        OWNER: ${{ github.repository_owner }}
+        PACKAGE: ${{ inputs.package }}
+        TAGS: ${{ inputs.tags }}
+        PUSH: ${{ inputs.push }}
+      run: bash "${ACTION_PATH}/scripts/prepare-references"
 
     - name: Log in to GitHub Container Registry
-      if: ${{ steps.metadata.outputs.kind == 'manual' || steps.metadata.outputs.kind == 'release' || steps.precheck.outputs.current == 'true' }}
       uses: docker/login-action@v4
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ github.token }}
+        password: ${{ inputs.token }}
 
     - name: Set up Docker Buildx
-      if: ${{ steps.metadata.outputs.kind == 'manual' || steps.metadata.outputs.kind == 'release' || steps.precheck.outputs.current == 'true' }}
       uses: docker/setup-buildx-action@v4
 
-    - name: Build and push immutable image
-      if: ${{ steps.metadata.outputs.kind == 'manual' || steps.metadata.outputs.kind == 'release' || steps.precheck.outputs.current == 'true' }}
+    - name: Build and optionally publish image
+      id: build
       uses: docker/build-push-action@v7
       env:
         DOCKER_BUILD_RECORD_UPLOAD: false
       with:
-        context: .
-        file: ./Dockerfile
-        target: runtime
+        context: ${{ inputs.context }}
+        file: ${{ inputs.file }}
+        target: ${{ inputs.target }}
         platforms: linux/amd64
-        push: ${{ github.event_name != 'workflow_dispatch' }}
-        tags: ${{ steps.metadata.outputs.tags }}
+        push: ${{ inputs.push }}
+        tags: ${{ steps.metadata.outputs.references }}
         build-args: ${{ inputs.build_args }}
         labels: |
           org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           org.opencontainers.image.revision=${{ github.sha }}
-          org.opencontainers.image.version=${{ steps.metadata.outputs.image_tag }}
-        cache-from: ${{ steps.metadata.outputs.cache_from }}
-        cache-to: ${{ steps.metadata.outputs.cache_to }}
-
-    - name: Recheck moving ref after build
-      if: ${{ success() && (steps.metadata.outputs.kind == 'dev' || steps.metadata.outputs.kind == 'rc') && steps.precheck.outputs.current == 'true' }}
-      id: current
-      shell: bash
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-        GH_TOKEN: ${{ github.token }}
-        REF: ${{ github.ref_name }}
-      run: bash "${ACTION_PATH}/scripts/check-current-ref"
-
-    - name: Update moving GHCR tag
-      if: ${{ success() && steps.current.outputs.current == 'true' }}
-      shell: bash
-      env:
-        IMAGE: ${{ steps.metadata.outputs.image }}
-        IMAGE_TAG: ${{ steps.metadata.outputs.image_tag }}
-        MOVING_TAG: ${{ steps.metadata.outputs.moving_tag }}
-      run: docker buildx imagetools create --tag "${IMAGE}:${MOVING_TAG}" "${IMAGE}:${IMAGE_TAG}"
-
-    - name: Export publication result
-      id: result
-      shell: bash
-      env:
-        KIND: ${{ steps.metadata.outputs.kind }}
-        CURRENT: ${{ steps.current.outputs.current }}
-      run: |
-        if [[ "${KIND}" == 'release' || "${CURRENT}" == 'true' ]]; then
-          echo 'published=true' >> "${GITHUB_OUTPUT}"
-        else
-          echo 'published=false' >> "${GITHUB_OUTPUT}"
-        fi
+        cache-from: ${{ inputs.cache_from }}
+        cache-to: ${{ inputs.cache_to }}

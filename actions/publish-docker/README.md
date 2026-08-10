@@ -1,14 +1,27 @@
-# Publish Docker
+# Publish Docker Package
 
-Build and publish a conventional `linux/amd64` Docker image to GHCR.
+Build and optionally publish one `linux/amd64` Docker package to GHCR.
 
-The Action handles the Orchestra-style `dev`, selected `release/vX.Y.Z`, strict `vX.Y.Z`, and
-manual-build ref protocol. It publishes immutable tags first, verifies moving refs before and after
-the build, and only then updates the `dev` or `rc` GHCR tag.
+The caller supplies an explicit GHCR `package` and newline-delimited Docker `tags`. Tags contain
+only values such as `v1.2.3` or `dev` and must not repeat the registry, owner, or package. The Action derives the lowercase namespace from `github.repository_owner` and
+returns the complete image name, references, and published digest.
 
-It deliberately has no ACR credentials, Nomad Pack identity, or Pack GitHub App credentials. Its
-`image`, `image_tag`, `kind`, and `published` outputs let a caller independently compose
-`Qiyin-Tech/acr-sync` and `actions/update-pack`.
+```yaml
+- id: docker
+  uses: Qiyin-Tech/publish-actions/actions/publish-docker@v1
+  with:
+    package: orchestra-backend
+    tags: |
+      dev-v1.2.3-0123456789abcdef
+      dev
+    context: .
+    file: ./Dockerfile
+    target: runtime
+    cache_from: type=registry,ref=ghcr.io/qiyin-tech/orchestra-backend:dev
+    cache_to: type=inline
+    push: true
+    token: ${{ github.token }}
+```
 
-The build convention is fixed to `./Dockerfile`, target `runtime`, and `linux/amd64`. Applications
-with custom runners or build graphs should keep their own build workflow.
+The implementation is intentionally fixed to `linux/amd64`. It does not inspect Git refs, classify
+dev/RC/releases, synchronize ACR, create GitHub Releases, or update Nomad Packs.

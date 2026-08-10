@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OWNER="${OWNER:?error: OWNER is required}"
+PACKAGE="${PACKAGE:?error: PACKAGE is required}"
+TAGS="${TAGS:?error: TAGS is required}"
+PUSH="${PUSH:?error: PUSH is required}"
+
+owner="${OWNER,,}"
+if [[ ! "${owner}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+  echo "Invalid GHCR owner: ${OWNER}" >&2
+  exit 1
+fi
+if [[ ! "${PACKAGE}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*(\/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]; then
+  echo "Invalid GHCR package name: ${PACKAGE}" >&2
+  exit 1
+fi
+case "${PUSH}" in
+  true|false) ;;
+  *)
+    echo "push must be true or false: ${PUSH}" >&2
+    exit 1
+    ;;
+esac
+
+image="ghcr.io/${owner}/${PACKAGE}"
+references=()
+declare -A seen=()
+while IFS= read -r tag; do
+  [[ -z "${tag}" ]] && continue
+  if [[ ! "${tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+    echo "Invalid Docker tag: ${tag}" >&2
+    exit 1
+  fi
+  if [[ -n "${seen[${tag}]:-}" ]]; then
+    echo "Duplicate Docker tag: ${tag}" >&2
+    exit 1
+  fi
+  seen["${tag}"]=1
+  references+=("${image}:${tag}")
+done <<< "${TAGS}"
+
+if ((${#references[@]} == 0)); then
+  echo 'At least one Docker tag is required' >&2
+  exit 1
+fi
+
+{
+  echo "image=${image}"
+  echo 'references<<EOF'
+  printf '%s\n' "${references[@]}"
+  echo 'EOF'
+} >> "${GITHUB_OUTPUT}"
