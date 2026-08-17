@@ -1,7 +1,8 @@
 # Update Nomad Pack
 
-Update one `<pack>/<dev|test|rc>` branch after an image or OCI artifact version is deployable. When `tag` is
-true, the updater creates the deterministic `<pack>/<version>` tag on the resulting commit.
+Update one `<pack>/<dev|test|rc>` channel after an image or OCI artifact version is deployable. When
+`tag` is true, nomad-packs promotes `dev` or `rc` into `main` and creates `<pack>/<version>` on the
+resulting main commit. The Action does not know the caller's branch names or release model.
 
 The Action also creates the short-lived GitHub App token and prevents an old branch run from moving
 the Pack backwards. The App client ID and private key are required, named inputs; callers source the
