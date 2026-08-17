@@ -15,7 +15,7 @@ inputs:
     description: Published image or artifact tag written as the Pack version and default reference tag
     required: true
   branch:
-    description: Pack branch to update (dev or rc)
+    description: Pack channel to update (dev, test, or rc)
     required: true
   tag:
     description: Whether to create the <pack>/<version> Git tag on the updated Pack commit

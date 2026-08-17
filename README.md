@@ -25,7 +25,7 @@ one Pack update. Inputs are:
 | `app_private_key` | yes | GitHub App private key; supply from GitHub Secrets |
 | `pack` | yes | Exact Pack directory name |
 | `version` | yes | Published image or artifact version |
-| `branch` | yes | Pack branch (`dev` or `rc`) |
+| `branch` | yes | Pack channel (`dev`, `test`, or `rc`); nomad-packs writes `<pack>/<channel>` |
 | `tag` | no | When true, create `<pack>/<version>` on the updated commit |
 
 [`Qiyin-Tech/acr-sync`](https://github.com/Qiyin-Tech/acr-sync) remains the independent authority
