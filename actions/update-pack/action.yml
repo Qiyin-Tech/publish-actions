@@ -1,5 +1,5 @@
 name: Update Nomad Pack
-description: Update a Nomad Pack branch and optionally tag the resulting commit
+description: Update a Nomad Pack channel and optionally promote it through main
 
 inputs:
   app_client_id:
@@ -18,7 +18,7 @@ inputs:
     description: Pack channel to update (dev, test, or rc)
     required: true
   tag:
-    description: Whether to create the <pack>/<version> Git tag on the updated Pack commit
+    description: Whether nomad-packs should promote dev/rc to main and tag the main commit
     required: false
     default: 'false'
 runs:

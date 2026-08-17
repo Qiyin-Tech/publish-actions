@@ -26,7 +26,7 @@ one Pack update. Inputs are:
 | `pack` | yes | Exact Pack directory name |
 | `version` | yes | Published image or artifact version |
 | `branch` | yes | Pack channel (`dev`, `test`, or `rc`); nomad-packs writes `<pack>/<channel>` |
-| `tag` | no | When true, create `<pack>/<version>` on the updated commit |
+| `tag` | no | When true, promote Pack `dev`/`rc` to main and tag the main commit |
 
 [`Qiyin-Tech/acr-sync`](https://github.com/Qiyin-Tech/acr-sync) remains the independent authority
 for GHCR-to-ACR synchronization.
