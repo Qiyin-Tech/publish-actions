@@ -20,9 +20,9 @@ GIT_EMAIL="${GIT_EMAIL:?error: GIT_EMAIL is required}"
 }
 
 case "${BRANCH}" in
-  dev|rc) ;;
+  dev|test|rc) ;;
   *)
-    echo "error: unsupported Pack branch: ${BRANCH}" >&2
+    echo "error: unsupported Pack channel: ${BRANCH}" >&2
     exit 1
     ;;
 esac

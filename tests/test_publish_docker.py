@@ -39,7 +39,8 @@ def test_actions_keep_protocol_boundaries_explicit() -> None:
     ("branch", "tag", "ref_type", "ref_name"),
     [
         ("dev", "false", "branch", "dev"),
-        ("rc", "false", "branch", "release/v1.2.3"),
+        ("test", "false", "branch", "test"),
+        ("rc", "false", "branch", "rc/v1.2.3"),
         ("dev", "true", "tag", "v1.2.3"),
     ],
 )
