@@ -14,10 +14,31 @@ GIT_EMAIL="${GIT_EMAIL:?error: GIT_EMAIL is required}"
   echo "error: invalid Pack name: ${PACK}" >&2
   exit 1
 }
-[[ "${VERSION}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+metadata_version="${VERSION}"
+if jq -e 'type == "object"' <<<"${VERSION}" >/dev/null 2>&1; then
+  VERSION="$(jq -ce '.' <<<"${VERSION}")"
+  if [[ "$(jq -r 'has("pack")' <<<"${VERSION}")" == true ]]; then
+    metadata_version="$(jq -er '.pack | select(type == "string")' <<<"${VERSION}")" || {
+      echo "error: structured Pack version field must be a string" >&2
+      exit 1
+    }
+  else
+    primary_task="${PACK//-/_}"
+    mapfile -t primary_versions < <(
+      jq -r --arg task "${primary_task}" \
+        '[(.images // {})[$task], (.artifacts // {})[$task]] | .[] | select(type == "string")' \
+        <<<"${VERSION}"
+    )
+    [[ "${#primary_versions[@]}" -eq 1 ]] || {
+      echo "error: structured Pack version must include primary task ${primary_task} exactly once or set pack" >&2
+      exit 1
+    }
+    metadata_version="${primary_versions[0]}"
+  fi
+elif [[ ! "${VERSION}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
   echo "error: invalid Pack version/reference tag: ${VERSION}" >&2
   exit 1
-}
+fi
 
 case "${BRANCH}" in
   dev|test|rc) ;;
@@ -49,6 +70,7 @@ jq -cn \
   --arg ref main \
   --arg pack "${PACK}" \
   --arg docker_tag "${VERSION}" \
+  --arg metadata_version "${metadata_version}" \
   --arg branch "${BRANCH}" \
   --arg tag "${TAG}" \
   --arg git_name "${GIT_NAME}" \
@@ -58,6 +80,7 @@ jq -cn \
     inputs: {
       pack: $pack,
       docker_tag: $docker_tag,
+      metadata_version: $metadata_version,
       branch: $branch,
       tag: $tag,
       git_name: $git_name,

@@ -82,6 +82,18 @@ Repository workflows retain their triggers, concurrency, timeout, Docker cache/b
 ACR target, and complete GitHub Release behavior while avoiding duplication in the shared
 publication protocols.
 
+`update-pack` normally applies one `version` tag to every Pack reference. Independently versioned
+tasks may instead pass a JSON string keyed by the Pack's `images` or `artifacts` group. An optional
+`pack` value explicitly sets the Pack metadata version; otherwise the Pack's snake-case primary task
+must be present and supplies it:
+
+```yaml
+version: '{"pack":"v1.2.4","artifacts":{"example_app":"v1.2.3","helper":"v4.5.6"}}'
+```
+
+The Action only resolves the metadata version and transports this JSON; `nomad-packs` owns its
+schema and reference validation.
+
 ## Versioning
 
 All Actions share one moving major compatibility tag, `@v1`. Security- or reproducibility-sensitive
