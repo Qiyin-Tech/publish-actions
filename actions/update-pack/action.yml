@@ -12,7 +12,7 @@ inputs:
     description: Pack directory name under nomad-packs/packs; never inferred from the source repository
     required: true
   version:
-    description: Published image or artifact tag written as the Pack version and default reference tag
+    description: Published tag for every Pack reference, or a JSON images/artifacts task-to-tag map
     required: true
   branch:
     description: Pack channel to update (dev, test, or rc)

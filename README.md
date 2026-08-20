@@ -82,6 +82,14 @@ Repository workflows retain their triggers, concurrency, timeout, Docker cache/b
 ACR target, and complete GitHub Release behavior while avoiding duplication in the shared
 publication protocols.
 
+`update-pack` normally applies one `version` tag to every Pack reference. Independently versioned
+tasks may instead pass a JSON string keyed by the Pack's `images` or `artifacts` group; the map
+must include the Pack's snake-case primary task so its value can become the Pack metadata version:
+
+```yaml
+version: '{"artifacts":{"example_app":"v1.2.3","helper":"v4.5.6"}}'
+```
+
 ## Versioning
 
 All Actions share one moving major compatibility tag, `@v1`. Security- or reproducibility-sensitive

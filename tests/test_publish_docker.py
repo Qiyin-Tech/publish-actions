@@ -36,16 +36,30 @@ def test_actions_keep_protocol_boundaries_explicit() -> None:
 
 
 @pytest.mark.parametrize(
-    ("branch", "tag", "ref_type", "ref_name"),
+    ("branch", "tag", "ref_type", "ref_name", "version", "metadata_version"),
     [
-        ("dev", "false", "branch", "dev"),
-        ("test", "false", "branch", "test"),
-        ("rc", "false", "branch", "rc/v1.2.3"),
-        ("dev", "true", "tag", "v1.2.3"),
+        ("dev", "false", "branch", "dev", "v1.2.3", "v1.2.3"),
+        ("test", "false", "branch", "test", "v1.2.3", "v1.2.3"),
+        ("rc", "false", "branch", "rc/v1.2.3", "v1.2.3", "v1.2.3"),
+        ("dev", "true", "tag", "v1.2.3", "v1.2.3", "v1.2.3"),
+        (
+            "dev",
+            "false",
+            "branch",
+            "dev",
+            '{"images":{"example_app":"v1.2.3","helper":"v4.5.6"}}',
+            "v1.2.3",
+        ),
     ],
 )
 def test_update_pack_dispatch_contract(
-    tmp_path: Path, branch: str, tag: str, ref_type: str, ref_name: str
+    tmp_path: Path,
+    branch: str,
+    tag: str,
+    ref_type: str,
+    ref_name: str,
+    version: str,
+    metadata_version: str,
 ) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -71,7 +85,7 @@ def test_update_pack_dispatch_contract(
             "GH_TOKEN": "pack-token",
             "SOURCE_GH_TOKEN": "source-token",
             "PACK": "example-app",
-            "VERSION": "v1.2.3",
+            "VERSION": version,
             "BRANCH": branch,
             "TAG": tag,
             "GIT_NAME": "Test",
@@ -95,6 +109,11 @@ def test_update_pack_dispatch_contract(
     payload = json.loads(capture.read_text(encoding="utf-8"))
     assert payload["inputs"]["branch"] == branch
     assert payload["inputs"]["tag"] == tag
+    assert payload["inputs"]["metadata_version"] == metadata_version
+    if version.startswith("{"):
+        assert json.loads(payload["inputs"]["docker_tag"]) == json.loads(version)
+    else:
+        assert payload["inputs"]["docker_tag"] == version
 
 
 def test_update_pack_skips_stale_branch_run(tmp_path: Path) -> None:
