@@ -18,10 +18,11 @@ metadata_version="${VERSION}"
 if jq -e 'type == "object"' <<<"${VERSION}" >/dev/null 2>&1; then
   VERSION="$(jq -ce '
     select(
-      length > 0 and
-      ((keys - ["artifacts", "images"]) | length == 0) and
-      all(.[]; type == "object" and length > 0) and
-      all(.[] | to_entries[];
+      ((keys - ["artifacts", "images", "pack"]) | length == 0) and
+      ((del(.pack) | length) > 0) and
+      (.pack == null or (.pack | type == "string")) and
+      all(del(.pack)[]; type == "object" and length > 0) and
+      all(del(.pack)[] | to_entries[];
         (.key | test("^[A-Za-z0-9_]+$")) and (.value | type == "string"))
     )
   ' <<<"${VERSION}")" || {
@@ -33,18 +34,26 @@ if jq -e 'type == "object"' <<<"${VERSION}" >/dev/null 2>&1; then
       echo "error: invalid Pack reference tag: ${reference_tag}" >&2
       exit 1
     }
-  done < <(jq -r '.[] | .[]' <<<"${VERSION}")
-  primary_task="${PACK//-/_}"
-  mapfile -t primary_versions < <(
-    jq -r --arg task "${primary_task}" \
-      '[(.images // {})[$task], (.artifacts // {})[$task]] | .[] | select(. != null)' \
-      <<<"${VERSION}"
-  )
-  [[ "${#primary_versions[@]}" -eq 1 ]] || {
-    echo "error: structured Pack version must include primary task ${primary_task} exactly once" >&2
-    exit 1
-  }
-  metadata_version="${primary_versions[0]}"
+  done < <(jq -r 'del(.pack) | .[] | .[]' <<<"${VERSION}")
+  if [[ "$(jq -r 'has("pack")' <<<"${VERSION}")" == true ]]; then
+    metadata_version="$(jq -r '.pack' <<<"${VERSION}")"
+    [[ "${metadata_version}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+      echo "error: invalid Pack version: ${metadata_version}" >&2
+      exit 1
+    }
+  else
+    primary_task="${PACK//-/_}"
+    mapfile -t primary_versions < <(
+      jq -r --arg task "${primary_task}" \
+        '[(.images // {})[$task], (.artifacts // {})[$task]] | .[] | select(. != null)' \
+        <<<"${VERSION}"
+    )
+    [[ "${#primary_versions[@]}" -eq 1 ]] || {
+      echo "error: structured Pack version must include primary task ${primary_task} exactly once or set pack" >&2
+      exit 1
+    }
+    metadata_version="${primary_versions[0]}"
+  fi
 elif [[ ! "${VERSION}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
   echo "error: invalid Pack version/reference tag: ${VERSION}" >&2
   exit 1

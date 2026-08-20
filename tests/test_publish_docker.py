@@ -50,6 +50,14 @@ def test_actions_keep_protocol_boundaries_explicit() -> None:
             '{"images":{"example_app":"v1.2.3","helper":"v4.5.6"}}',
             "v1.2.3",
         ),
+        (
+            "dev",
+            "false",
+            "branch",
+            "dev",
+            '{"pack":"v2.0.0","images":{"helper":"v4.5.6"}}',
+            "v2.0.0",
+        ),
     ],
 )
 def test_update_pack_dispatch_contract(

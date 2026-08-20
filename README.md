@@ -83,11 +83,12 @@ ACR target, and complete GitHub Release behavior while avoiding duplication in t
 publication protocols.
 
 `update-pack` normally applies one `version` tag to every Pack reference. Independently versioned
-tasks may instead pass a JSON string keyed by the Pack's `images` or `artifacts` group; the map
-must include the Pack's snake-case primary task so its value can become the Pack metadata version:
+tasks may instead pass a JSON string keyed by the Pack's `images` or `artifacts` group. An optional
+`pack` value explicitly sets the Pack metadata version; otherwise the Pack's snake-case primary task
+must be present and supplies it:
 
 ```yaml
-version: '{"artifacts":{"example_app":"v1.2.3","helper":"v4.5.6"}}'
+version: '{"pack":"v1.2.4","artifacts":{"example_app":"v1.2.3","helper":"v4.5.6"}}'
 ```
 
 ## Versioning
