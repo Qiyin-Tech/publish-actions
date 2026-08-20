@@ -55,8 +55,8 @@ def test_actions_keep_protocol_boundaries_explicit() -> None:
             "false",
             "branch",
             "dev",
-            '{"pack":"v2.0.0","images":{"helper":"v4.5.6"}}',
-            "v2.0.0",
+            '{"pack":"候选版本 + build/43","images":{"helper":"nomad-packs validates this"}}',
+            "候选版本 + build/43",
         ),
     ],
 )

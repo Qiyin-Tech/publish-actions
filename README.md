@@ -91,6 +91,9 @@ must be present and supplies it:
 version: '{"pack":"v1.2.4","artifacts":{"example_app":"v1.2.3","helper":"v4.5.6"}}'
 ```
 
+The Action only resolves the metadata version and transports this JSON; `nomad-packs` owns its
+schema and reference validation.
+
 ## Versioning
 
 All Actions share one moving major compatibility tag, `@v1`. Security- or reproducibility-sensitive

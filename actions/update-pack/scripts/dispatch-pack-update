@@ -16,36 +16,17 @@ GIT_EMAIL="${GIT_EMAIL:?error: GIT_EMAIL is required}"
 }
 metadata_version="${VERSION}"
 if jq -e 'type == "object"' <<<"${VERSION}" >/dev/null 2>&1; then
-  VERSION="$(jq -ce '
-    select(
-      ((keys - ["artifacts", "images", "pack"]) | length == 0) and
-      ((del(.pack) | length) > 0) and
-      (.pack == null or (.pack | type == "string")) and
-      all(del(.pack)[]; type == "object" and length > 0) and
-      all(del(.pack)[] | to_entries[];
-        (.key | test("^[A-Za-z0-9_]+$")) and (.value | type == "string"))
-    )
-  ' <<<"${VERSION}")" || {
-    echo "error: invalid structured Pack version" >&2
-    exit 1
-  }
-  while IFS= read -r reference_tag; do
-    [[ "${reference_tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
-      echo "error: invalid Pack reference tag: ${reference_tag}" >&2
-      exit 1
-    }
-  done < <(jq -r 'del(.pack) | .[] | .[]' <<<"${VERSION}")
+  VERSION="$(jq -ce '.' <<<"${VERSION}")"
   if [[ "$(jq -r 'has("pack")' <<<"${VERSION}")" == true ]]; then
-    metadata_version="$(jq -r '.pack' <<<"${VERSION}")"
-    [[ "${metadata_version}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
-      echo "error: invalid Pack version: ${metadata_version}" >&2
+    metadata_version="$(jq -er '.pack | select(type == "string")' <<<"${VERSION}")" || {
+      echo "error: structured Pack version field must be a string" >&2
       exit 1
     }
   else
     primary_task="${PACK//-/_}"
     mapfile -t primary_versions < <(
       jq -r --arg task "${primary_task}" \
-        '[(.images // {})[$task], (.artifacts // {})[$task]] | .[] | select(. != null)' \
+        '[(.images // {})[$task], (.artifacts // {})[$task]] | .[] | select(type == "string")' \
         <<<"${VERSION}"
     )
     [[ "${#primary_versions[@]}" -eq 1 ]] || {
