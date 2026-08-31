@@ -18,7 +18,7 @@ inputs:
     description: Pack channel to update (dev, test, or rc)
     required: true
   tag:
-    description: Whether nomad-packs should promote dev/rc to main and tag the main commit
+    description: Whether nomad-packs should promote test/rc to main and tag the main commit
     required: false
     default: 'false'
 runs:
