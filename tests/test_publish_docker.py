@@ -80,6 +80,7 @@ def test_update_pack_dispatch_contract(
         "  printf '%s\\n' \"${GITHUB_SHA}\"\n"
         "else\n"
         "  cat > \"${CAPTURE_PATH}\"\n"
+        "  echo '{\"workflow_run_id\":12345}'\n"
         "fi\n",
         encoding="utf-8",
     )
@@ -102,6 +103,11 @@ def test_update_pack_dispatch_contract(
             "GITHUB_REF_NAME": ref_name,
             "GITHUB_REPOSITORY": "Qiyin-Tech/example-app",
             "GITHUB_SHA": SHA,
+            "GITHUB_REF": f"refs/{'tags' if ref_type == 'tag' else 'heads'}/{ref_name}",
+            "GITHUB_RUN_ID": "3456",
+            "GITHUB_RUN_ATTEMPT": "2",
+            "RUNNER_TEMP": str(tmp_path),
+            "EXPECTED_PACKS": "3",
         }
     )
 
@@ -118,6 +124,12 @@ def test_update_pack_dispatch_contract(
     assert payload["inputs"]["branch"] == branch
     assert payload["inputs"]["tag"] == tag
     assert payload["inputs"]["metadata_version"] == metadata_version
+    report = json.loads((tmp_path / "deploy-watch-example-app/report.json").read_text())
+    assert report["source"]["id"] == 3456
+    assert report["source"]["attempt"] == 2
+    assert report["target"] == {"repo": "Qiyin-Tech/nomad-packs", "id": 12345, "workflow": "update-pack.yml"}
+    assert report["outcome"] == "dispatched"
+    assert report["expected_reports"] == 3
     if version.startswith("{"):
         assert json.loads(payload["inputs"]["docker_tag"]) == json.loads(version)
     else:
@@ -156,6 +168,10 @@ def test_update_pack_skips_stale_branch_run(tmp_path: Path) -> None:
             "GITHUB_REF_NAME": "dev",
             "GITHUB_REPOSITORY": "Qiyin-Tech/example-app",
             "GITHUB_SHA": SHA,
+            "GITHUB_REF": "refs/heads/dev",
+            "GITHUB_RUN_ID": "3456",
+            "GITHUB_RUN_ATTEMPT": "1",
+            "RUNNER_TEMP": str(tmp_path),
         }
     )
 
@@ -170,3 +186,6 @@ def test_update_pack_skips_stale_branch_run(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert not capture.exists()
     assert "Skipping stale dev build" in result.stdout
+    report = json.loads((tmp_path / "deploy-watch-example-app/report.json").read_text())
+    assert report["outcome"] == "superseded"
+    assert "target" not in report
