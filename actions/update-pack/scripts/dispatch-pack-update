@@ -56,17 +56,33 @@ case "${TAG}" in
     ;;
 esac
 
+report_dir="${RUNNER_TEMP:?error: RUNNER_TEMP is required}/deploy-watch-${PACK}"
+mkdir -p "${report_dir}"
+write_report() {
+  jq -cn --arg pack "${PACK}" --arg version "${metadata_version}" \
+    --arg channel "${BRANCH}" --argjson formal "${TAG}" \
+    --argjson expected "${EXPECTED_PACKS:-1}" \
+    --arg outcome "$1" --arg child "${2:-}" \
+    '{schema:1, kind:"dispatch", source:{repo:$ENV.GITHUB_REPOSITORY,
+      id:($ENV.GITHUB_RUN_ID|tonumber), attempt:($ENV.GITHUB_RUN_ATTEMPT|tonumber),
+      sha:$ENV.GITHUB_SHA, ref:$ENV.GITHUB_REF},
+      pack:$pack, version:$version, channel:$channel, formal:$formal, outcome:$outcome, expected_reports:$expected}
+      + (if $child == "" then {} else {target:{repo:"Qiyin-Tech/nomad-packs",
+        id:($child|tonumber), workflow:"update-pack.yml"}} end)' > "${report_dir}/report.json"
+}
+
 if [[ "${GITHUB_REF_TYPE}" == 'branch' ]]; then
   latest_sha="$(GH_TOKEN="${SOURCE_GH_TOKEN}" gh api \
     "repos/${GITHUB_REPOSITORY}/git/ref/heads/${GITHUB_REF_NAME}" \
     --jq '.object.sha')"
   if [[ "${latest_sha}" != "${GITHUB_SHA}" ]]; then
     echo "Skipping stale ${GITHUB_REF_NAME} build ${GITHUB_SHA}; current SHA is ${latest_sha}"
+    write_report superseded
     exit 0
   fi
 fi
 
-jq -cn \
+response="$(jq -cn \
   --arg ref main \
   --arg pack "${PACK}" \
   --arg docker_tag "${VERSION}" \
@@ -89,4 +105,8 @@ jq -cn \
   }' |
   gh api repos/Qiyin-Tech/nomad-packs/actions/workflows/update-pack.yml/dispatches \
     --method POST \
-    --input -
+    --header 'X-GitHub-Api-Version: 2026-03-10' \
+    --input -)"
+child_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0)' <<<"${response}")"
+write_report dispatched "${child_id}"
+echo "Pack update accepted as run ${child_id}"

@@ -9,3 +9,8 @@ the Pack backwards. The App client ID and private key are required, named inputs
 private-key value from GitHub Secrets so it remains masked.
 
 It does not build, publish, synchronize, release, or deploy the artifact.
+
+Each dispatch stores a small `deploy-watch-v1-<attempt>-<pack>` artifact with the source run/attempt,
+Pack request and exact child run ID returned by GitHub API 2026-03-10. A stale build records
+`superseded` without a child. The observer can therefore update one publication card across repositories;
+this diagnostic record does not change the selected channel or formal-release semantics.

@@ -46,4 +46,14 @@ runs:
         GIT_NAME: ${{ github.actor }}
         GIT_EMAIL: ${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com
         ACTION_PATH: ${{ github.action_path }}
+        EXPECTED_PACKS: ${{ strategy.job-total || 1 }}
       run: bash "${ACTION_PATH}/scripts/dispatch-pack-update"
+
+    - name: Save exact Pack dispatch identity
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7.0.2
+      with:
+        name: deploy-watch-v1-${{ github.run_attempt }}-${{ inputs.pack }}
+        path: ${{ runner.temp }}/deploy-watch-${{ inputs.pack }}/report.json
+        if-no-files-found: ignore
+        retention-days: 90
