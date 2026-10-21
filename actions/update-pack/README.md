@@ -1,7 +1,7 @@
 # Update Nomad Pack
 
 Update one `<pack>/<dev|test|rc>` channel after an image or OCI artifact version is deployable. When
-`tag` is true, nomad-packs promotes `dev` or `rc` into `main` and creates `<pack>/<version>` on the
+`tag` is true, nomad-packs promotes the selected `dev`, `test`, or `rc` candidate into `main` and creates `<pack>/<version>` on the
 resulting main commit. The Action does not know the caller's branch names or release model.
 
 The Action also creates the short-lived GitHub App token and prevents an old branch run from moving
@@ -14,3 +14,7 @@ Each dispatch stores a small `deploy-watch-v1-<attempt>-<pack>` artifact with th
 Pack request and exact child run ID returned by GitHub API 2026-03-10. A stale build records
 `superseded` without a child. The observer can therefore update one publication card across repositories;
 this diagnostic record does not change the selected channel or formal-release semantics.
+
+Release paths may be `dev → test → main` or `dev → main`; Packs without a separate test stage
+do not need a test branch. Dispatch records are uploaded on a best-effort basis. A storage quota failure emits a warning while the accepted Pack request continues; the exact
+child run ID remains in the dispatch log.
