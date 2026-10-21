@@ -18,7 +18,7 @@ inputs:
     description: Pack channel to update (dev, test, or rc)
     required: true
   tag:
-    description: Whether nomad-packs should promote dev/rc to main and tag the main commit
+    description: Whether nomad-packs should promote dev/test/rc to main and tag the main commit
     required: false
     default: 'false'
 runs:
@@ -49,7 +49,9 @@ runs:
         EXPECTED_PACKS: ${{ strategy.job-total || 1 }}
       run: bash "${ACTION_PATH}/scripts/dispatch-pack-update"
 
+    # Recording the accepted dispatch must not fail publication when storage is full.
     - name: Save exact Pack dispatch identity
+      continue-on-error: true
       if: ${{ always() }}
       uses: actions/upload-artifact@v7.0.2
       with:
